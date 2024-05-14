@@ -1,11 +1,15 @@
 library(dplyr)
+library(stringr)
 library(ggplot2)
+library(ggrepel)
 library(emmeans)
 library(ggpmisc)
 library(tidyr)
+library(tibble)
 library(gridExtra)
 library(purrr)
 library(corrplot)
+library(pheatmap)
 
 my_theme <- theme_minimal() +
     theme(
@@ -152,6 +156,7 @@ plot_correlation <- function(split_by_species = FALSE, show_R2 = FALSE) {
 }
 
 jpeg("Figure 3.jpg", width = 2048, height = 2048, res = 300, quality = 100)
+
 plot_correlation(split_by_species = FALSE, show_R2 = FALSE)
 dev.off()
 
@@ -237,8 +242,84 @@ ggplot(significant_interactions, aes(x = Factors, y = Test)) +
     theme(axis.text = element_text(angle = 45, hjust = 1, size = 20))
 dev.off()
 
-# Figure 5 - Correlations between tests
+### Figure 5 - Distance in the duration/burden/diversity space vs. difference in effect size
+
+test <- "FST"
+effect_size_long_test <- effect_size_long %>%
+    filter(Test == test) %>%
+    filter(complete.cases(.)) %>%
+    mutate(Reference = make.unique(Reference))
+
+# Get the distance matrix in the duration/burden/diversity space
+distance_matrix <- effect_size_long_test %>%
+    select(Duration, Burden, Diversity) %>%
+    dist() %>%
+    as.matrix()
+rownames(distance_matrix) <- effect_size_long_test$Reference
+colnames(distance_matrix) <- effect_size_long_test$Reference
+
+pheatmap(distance_matrix,
+    cluster_rows = TRUE,
+    cluster_cols = TRUE
+)
+
+distance_matrix[lower.tri(distance_matrix)] <- NA
+
+distance_matrix %>%
+    as.data.frame() %>%
+    rownames_to_column(var = "Paper_1") %>%
+    pivot_longer(-Paper_1, names_to = "Paper_2", values_to = "Distance") %>%
+    filter(!is.na(Distance)) %>%
+    mutate(
+        Duration_1 = effect_size_long_test$Duration[match(Paper_1, effect_size_long_test$Reference)],
+        Duration_2 = effect_size_long_test$Duration[match(Paper_2, effect_size_long_test$Reference)],
+        Burden_1 = effect_size_long_test$Burden[match(Paper_1, effect_size_long_test$Reference)],
+        Burden_2 = effect_size_long_test$Burden[match(Paper_2, effect_size_long_test$Reference)],
+        Diversity_1 = effect_size_long_test$Diversity[match(Paper_1, effect_size_long_test$Reference)],
+        Diversity_2 = effect_size_long_test$Diversity[match(Paper_2, effect_size_long_test$Reference)],        
+        Species_1 = effect_size_long_test$Species[match(Paper_1, effect_size_long_test$Reference)],
+        Species_2 = effect_size_long_test$Species[match(Paper_2, effect_size_long_test$Reference)],
+    ) %>%
+    mutate(
+        Effect_size_P1 = effect_size_long_test$Effect_size[match(Paper_1, effect_size_long_test$Reference)],
+        Effect_size_P2 = effect_size_long_test$Effect_size[match(Paper_2, effect_size_long_test$Reference)]
+    ) %>%
+    mutate(Effect_size_diff = abs(Effect_size_P1 - Effect_size_P2)) -> distance_data
+
+num_points_to_annotate <- 5
+
 jpeg("Figure 5.jpg", width = 2048, height = 2048, res = 300, quality = 100)
+distance_data %>%
+    ggplot(aes(x = Distance, y = Effect_size_diff)) +
+    # geom_point(aes(col = Species_1 == Species_2)) +
+    geom_point() +
+    # Annotate a few points
+    geom_text_repel(
+        data = distance_data %>%
+            filter(str_detect(Paper_1, "Eid RS") & str_detect(Paper_2, "Yu X") |
+                str_detect(Paper_1, "Walton NL") & str_detect(Paper_2, "Qin L") |
+                Distance > 80 & Effect_size_diff > 4.5 & Effect_size_diff < 5),
+        aes(label = paste(
+            "Du:", Duration_1, "/", Duration_2, "\n",
+            "B:", Burden_1, "/", Burden_2, "\n",
+            "Di:", Diversity_1, "/", Diversity_2, "\n",
+            "ES:", format(Effect_size_P1, digits = 2), 
+                "/", format(Effect_size_P2, digits = 2)
+        )),
+        nudge_x = 1, nudge_y = c(1.5, 2, 1.5), size = 5, color = rgb(.4, .4, .4)
+    ) +
+    xlab("Distance in the Duration/Burden/Diversity space") +
+    ylab("Difference in effect size") +
+    my_theme +
+    theme(axis.text = element_text(size = 16))
+dev.off()
+
+cor.test(distance_data$Distance, distance_data$Effect_size_diff,
+    method = "pearson"
+)
+
+# Figure 6 - Correlations between tests
+jpeg("Figure 6.jpg", width = 2048, height = 2048, res = 300, quality = 100)
 effect_size %>%
     select(contains("Effect_size")) %>%
     # Rename columns to remove the "Effect_size" part
@@ -250,4 +331,3 @@ effect_size %>%
         lower.col = "black", tl.col = "black"
     )
 dev.off()
-
