@@ -276,9 +276,9 @@ distance_matrix %>%
         Burden_1 = effect_size_long_test$Burden[match(Paper_1, effect_size_long_test$Reference)],
         Burden_2 = effect_size_long_test$Burden[match(Paper_2, effect_size_long_test$Reference)],
         Diversity_1 = effect_size_long_test$Diversity[match(Paper_1, effect_size_long_test$Reference)],
-        Diversity_2 = effect_size_long_test$Diversity[match(Paper_2, effect_size_long_test$Reference)],        
+        Diversity_2 = effect_size_long_test$Diversity[match(Paper_2, effect_size_long_test$Reference)],
         Species_1 = effect_size_long_test$Species[match(Paper_1, effect_size_long_test$Reference)],
-        Species_2 = effect_size_long_test$Species[match(Paper_2, effect_size_long_test$Reference)],
+        Species_2 = effect_size_long_test$Species[match(Paper_2, effect_size_long_test$Reference)]
     ) %>%
     mutate(
         Effect_size_P1 = effect_size_long_test$Effect_size[match(Paper_1, effect_size_long_test$Reference)],
@@ -286,9 +286,9 @@ distance_matrix %>%
     ) %>%
     mutate(Effect_size_diff = abs(Effect_size_P1 - Effect_size_P2)) -> distance_data
 
-num_points_to_annotate <- 5
 
-jpeg("Figure 5.jpg", width = 2048, height = 2048, res = 300, quality = 100)
+jpeg("Figure 5.jpg", width = 3000, height = 3000, res = 300, quality = 100)
+
 distance_data %>%
     ggplot(aes(x = Distance, y = Effect_size_diff)) +
     # geom_point(aes(col = Species_1 == Species_2)) +
@@ -298,20 +298,36 @@ distance_data %>%
         data = distance_data %>%
             filter(str_detect(Paper_1, "Eid RS") & str_detect(Paper_2, "Yu X") |
                 str_detect(Paper_1, "Walton NL") & str_detect(Paper_2, "Qin L") |
-                Distance > 80 & Effect_size_diff > 4.5 & Effect_size_diff < 5),
+                str_detect(Paper_1, "Wang F") & str_detect(Paper_2, "Verma H")),
         aes(label = paste(
             "Du:", Duration_1, "/", Duration_2, "\n",
             "B:", Burden_1, "/", Burden_2, "\n",
             "Di:", Diversity_1, "/", Diversity_2, "\n",
-            "ES:", format(Effect_size_P1, digits = 2), 
-                "/", format(Effect_size_P2, digits = 2)
+            "ES:", format(Effect_size_P1, digits = 2),
+            "/", format(Effect_size_P2, digits = 2)
         )),
-        nudge_x = 1, nudge_y = c(1.5, 2, 1.5), size = 5, color = rgb(.4, .4, .4)
+        nudge_x = 1, nudge_y = 1.5, size = 4, color = rgb(.4, .4, .4)
+    ) +
+    annotate("text",
+        x = c(3, 89, 128),
+        y = c(4.5, 5.9, 0.6),
+        label = c("A", "B", "C"),
+        size = 8, color = rgb(.7, .2, .2)
     ) +
     xlab("Distance in the Duration/Burden/Diversity space") +
     ylab("Difference in effect size") +
-    my_theme +
-    theme(axis.text = element_text(size = 16))
+    my_theme
+dev.off()
+
+jpeg("Figure 5 not annotated.jpg", width = 3000, height = 3000, res = 300, quality = 100)
+
+distance_data %>%
+    ggplot(aes(x = Distance, y = Effect_size_diff)) +
+    # geom_point(aes(col = Species_1 == Species_2)) +
+    geom_point() +
+    xlab("Distance in the Duration/Burden/Diversity space") +
+    ylab("Difference in effect size") +
+    my_theme
 dev.off()
 
 cor.test(distance_data$Distance, distance_data$Effect_size_diff,
@@ -331,3 +347,9 @@ effect_size %>%
         lower.col = "black", tl.col = "black"
     )
 dev.off()
+
+
+distance_data %>%
+    filter(Distance > 80 &
+        Effect_size_diff > 5 & Effect_size_diff < 6) %>%
+    pull(Paper_1, Paper_2)
